@@ -1,0 +1,47 @@
+name: Publish logistics update to LinkedIn
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub schedules run in UTC; 14:00 UTC = 09:00 Lima (UTC-5).
+    - cron: '0 14 * * 1-5'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: logistics-linkedin-publisher
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
+      LINKEDIN_AUTHOR_URN: ${{ secrets.LINKEDIN_AUTHOR_URN }}
+      LINKEDIN_VERSION: ${{ vars.LINKEDIN_VERSION }}
+      AUTO_PUBLISH: ${{ vars.AUTO_PUBLISH || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Restore publication history
+        uses: actions/cache/restore@v4
+        with:
+          path: posted.json
+          key: posted-history-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            posted-history-
+      - name: Discover and optionally publish
+        run: python bot.py
+      - name: Save publication history
+        if: success() && env.AUTO_PUBLISH == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: posted.json
+          key: posted-history-${{ github.run_id }}-${{ github.run_attempt }}
